@@ -97,3 +97,72 @@
 - 단위 테스트는 그 자동화의 핵심이며, **JUnit5 + AssertJ**로 쉽게 구현할 수 있다.
 
 </details>
+
+
+<details>
+  <summary>테스트 케이스 세분화 (Happy / Exception / Boundary)</summary>
+
+테스트를 설계할 때는 하나의 기능을 다양한 시나리오로 나누어 검증해야 한다.  
+대표적으로 아래 세 가지 유형으로 구분한다.
+
+| 구분 | 설명 | 목적 |
+|------|------|------|
+| ✅ **해피 케이스 (Happy Case)** | 정상 입력 시, 예상한 대로 동작하는 경우 | “정상적인 흐름이 잘 작동하는가?” |
+| ⚠️ **예외 케이스 (Exception Case)** | 잘못된 입력이나 예외 상황을 처리하는 경우 | “에러 상황을 올바르게 처리하는가?” |
+| ⚙️ **경계값 테스트 (Boundary Test)** | 값의 경계(이상/이하/초과/미만)를 검증하는 경우 | “한계선에서 동작이 안정적인가?” |
+
+---
+
+### 🧪 테스트 코드 예시
+
+```java
+@Test
+void addSeveralBeverages() {
+  // ✅ 해피 케이스 (정상 흐름)
+  // given
+  CafeKiosk cafeKiosk = new CafeKiosk();
+  Americano americano = new Americano();
+
+  // when
+  cafeKiosk.add(americano, 2);
+
+  // then
+  // 정상적으로 2잔이 추가되어야 함
+  assertThat(cafeKiosk.getBeverages().get(0)).isEqualTo(americano);
+  assertThat(cafeKiosk.getBeverages().get(1)).isEqualTo(americano);
+}
+
+@Test
+void addZeroBeverages() {
+  // ⚠️ 예외 케이스 (비정상 흐름)
+  // given
+  CafeKiosk cafeKiosk = new CafeKiosk();
+  Americano americano = new Americano();
+
+  // when & then
+  // count가 0이면 예외가 발생해야 한다.
+  assertThatThrownBy(() -> cafeKiosk.add(americano, 0))
+      .isInstanceOf(IllegalArgumentException.class)
+      .hasMessage("음료는 1잔 이상 주문하실 수 있습니다.");
+}
+
+@Test
+void addBeveragesBoundaryTest() {
+  // ⚙️ 경계값 테스트 (Boundary Test)
+  CafeKiosk cafeKiosk = new CafeKiosk();
+  Americano americano = new Americano();
+
+  // count = 1 → 허용되는 최소값
+  cafeKiosk.add(americano, 1);
+  assertThat(cafeKiosk.getBeverages()).hasSize(1);
+
+  // count = 0 → 허용되지 않는 경계선 값
+  assertThatThrownBy(() -> cafeKiosk.add(americano, 0))
+      .isInstanceOf(IllegalArgumentException.class)
+      .hasMessage("음료는 1잔 이상 주문하실 수 있습니다.");
+
+  // count = -1 → 유효 범위 미만
+  assertThatThrownBy(() -> cafeKiosk.add(americano, -1))
+      .isInstanceOf(IllegalArgumentException.class)
+      .hasMessage("음료는 1잔 이상 주문하실 수 있습니다.");
+}
