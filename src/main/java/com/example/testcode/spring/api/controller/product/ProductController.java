@@ -1,7 +1,7 @@
-package com.example.testcode.spring.domain.controller.product;
+package com.example.testcode.spring.api.controller.product;
 
-import com.example.testcode.spring.service.product.ProductService;
-import com.example.testcode.spring.service.product.response.ProductResponse;
+import com.example.testcode.spring.api.service.product.ProductService;
+import com.example.testcode.spring.api.service.product.response.ProductResponse;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;

@@ -1,4 +1,4 @@
-package com.example.testcode.spring.service.product.response;
+package com.example.testcode.spring.api.service.product.response;
 
 import com.example.testcode.spring.domain.product.Product;
 import com.example.testcode.spring.domain.product.ProductSellingStatus;
