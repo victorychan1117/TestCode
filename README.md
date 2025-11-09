@@ -589,3 +589,83 @@ IoC / DI / AOP를 중심으로 구성되어 있다.
 
 ---
 
+<details>
+  <summary>Repository 테스트 예시 — ProductRepositoryTest</summary>
+
+### 🎯 테스트 목적
+> **특정 판매 상태(SELLING, HOLD)에 해당하는 상품만 DB에서 조회되는지 검증한다.**
+
+이 테스트는 `@DataJpaTest`를 활용하여  
+`ProductRepository`의 쿼리 메서드(`findAllBySellingStatusIn`)가  
+의도한 대로 동작하는지를 검증한다.
+
+---
+
+### 🧱 테스트 구조
+
+```java
+package com.example.testcode.spring.domain.product;
+
+import static com.example.testcode.spring.domain.product.ProductSellingStatus.*;
+import static com.example.testcode.spring.domain.product.ProductType.HANDMADE;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
+
+import java.util.List;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
+import org.springframework.test.context.ActiveProfiles;
+
+@ActiveProfiles("test")
+@DataJpaTest // ✅ Repository 계층 테스트용 어노테이션
+class ProductRepositoryTest {
+
+  @Autowired
+  private ProductRepository productRepository;
+
+  @DisplayName("원하는 판매상태를 가진 상품들을 조회한다.")
+  @Test
+  void findAllBySellingStatusIn() {
+    // given — 테스트용 데이터 준비
+    Product product1 = Product.builder()
+        .productNumber("001")
+        .type(HANDMADE)
+        .sellingStatus(SELLING)
+        .name("아메리카노")
+        .price(4000)
+        .build();
+
+    Product product2 = Product.builder()
+        .productNumber("002")
+        .type(HANDMADE)
+        .sellingStatus(HOLD)
+        .name("카페라떼")
+        .price(4500)
+        .build();
+
+    Product product3 = Product.builder()
+        .productNumber("003")
+        .type(HANDMADE)
+        .sellingStatus(STOP_SELLING)
+        .name("팥빙수")
+        .price(7000)
+        .build();
+
+    productRepository.saveAll(List.of(product1, product2, product3));
+
+    // when — 특정 판매 상태(SELLING, HOLD)로 조회
+    List<Product> products = productRepository.findAllBySellingStatusIn(List.of(SELLING, HOLD));
+
+    // then — 검증
+    assertThat(products).hasSize(2)
+        .extracting("productNumber", "name", "sellingStatus")
+        .containsExactly(
+            tuple("001", "아메리카노", SELLING),
+            tuple("002", "카페라떼", HOLD)
+        );
+  }
+}
+```
+</details>
