@@ -33,6 +33,8 @@
 
 </details>
 
+---
+
 <details>
   <summary>Manual Testing vs Automated Testing</summary>
 
@@ -74,7 +76,7 @@
 
 - **JUnit5**  
   → Java에서 단위 테스트를 위한 표준 프레임워크  
-  → `@Test`, `@BeforeEach`, `@AfterEach` 등의 어노테이션을 제공  
+  → `@Test`, `@BeforeEach`, `@AfterEach` 등의 어노테이션 제공  
   → XUnit 계열 (Kent Beck이 만든 SUnit → JUnit → NUnit)
 
 - **AssertJ**  
@@ -98,6 +100,7 @@
 
 </details>
 
+---
 
 <details>
   <summary>테스트 케이스 세분화 (Happy / Exception / Boundary)</summary>
@@ -127,20 +130,16 @@ void addSeveralBeverages() {
   cafeKiosk.add(americano, 2);
 
   // then
-  // 정상적으로 2잔이 추가되어야 함
   assertThat(cafeKiosk.getBeverages().get(0)).isEqualTo(americano);
   assertThat(cafeKiosk.getBeverages().get(1)).isEqualTo(americano);
 }
 
 @Test
 void addZeroBeverages() {
-  // ⚠️ 예외 케이스 (비정상 흐름)
-  // given
+  // ⚠️ 예외 케이스
   CafeKiosk cafeKiosk = new CafeKiosk();
   Americano americano = new Americano();
 
-  // when & then
-  // count가 0이면 예외가 발생해야 한다.
   assertThatThrownBy(() -> cafeKiosk.add(americano, 0))
       .isInstanceOf(IllegalArgumentException.class)
       .hasMessage("음료는 1잔 이상 주문하실 수 있습니다.");
@@ -148,7 +147,7 @@ void addZeroBeverages() {
 
 @Test
 void addBeveragesBoundaryTest() {
-  // ⚙️ 경계값 테스트 (Boundary Test)
+  // ⚙️ 경계값 테스트
   CafeKiosk cafeKiosk = new CafeKiosk();
   Americano americano = new Americano();
 
@@ -166,3 +165,141 @@ void addBeveragesBoundaryTest() {
       .isInstanceOf(IllegalArgumentException.class)
       .hasMessage("음료는 1잔 이상 주문하실 수 있습니다.");
 }
+```
+</details>
+
+---
+
+<details>
+  <summary>테스트하기 어려운 코드 vs 테스트하기 쉬운 코드</summary>
+
+### ⚠️ 테스트하기 어려운 코드
+
+테스트하기 어려운 코드는 **외부 환경이나 실행 시점에 의존하는 코드**입니다.  
+즉, 실행할 때마다 결과가 달라지거나, 외부 시스템에 영향을 주는 코드입니다.
+
+#### 💥 대표적인 유형
+
+| 유형 | 설명 |
+|------|------|
+| ⏰ **현재 시간/날짜 의존** | `LocalDateTime.now()` 등 실행 시점마다 다른 값을 생성 |
+| 🎲 **랜덤 값 사용** | `Math.random()`처럼 실행할 때마다 결과가 달라짐 |
+| 🌍 **전역 변수/상태 의존** | 다른 테스트나 실행 환경의 영향을 받음 |
+| 💬 **외부 입출력 의존** | 콘솔 출력, 메시지 전송, DB 저장 등 외부 리소스에 의존 |
+
+---
+
+### 💡 예시 1: 테스트하기 어려운 코드
+
+```java
+public class CafeKiosk {
+
+    private static final LocalTime SHOP_OPEN_TIME = LocalTime.of(9, 0);  // 9시
+    private static final LocalTime SHOP_CLOSE_TIME = LocalTime.of(22, 0); // 22시
+    private List<Beverage> beverages = new ArrayList<>();
+
+    public Order createOrder() {
+        LocalDateTime currentDateTime = LocalDateTime.now(); // ⚠️ 실행 시점마다 달라짐
+        LocalTime currentTime = currentDateTime.toLocalTime();
+
+        if (currentTime.isBefore(SHOP_OPEN_TIME) || currentTime.isAfter(SHOP_CLOSE_TIME)) {
+            throw new IllegalArgumentException("주문 시간이 아닙니다. 관리자에게 문의하세요.");
+        }
+
+        return new Order(LocalDateTime.now(), beverages);
+    }
+}
+
+public class CafeKiosk {
+
+    private static final LocalTime SHOP_OPEN_TIME = LocalTime.of(9, 0);
+    private static final LocalTime SHOP_CLOSE_TIME = LocalTime.of(22, 0);
+    private List<Beverage> beverages = new ArrayList<>();
+
+    // 💡 외부에서 시간을 주입받아 테스트 가능하게 개선
+    public Order createOrder(LocalDateTime currentDateTime) {
+        LocalTime currentTime = currentDateTime.toLocalTime();
+
+        if (currentTime.isBefore(SHOP_OPEN_TIME) || currentTime.isAfter(SHOP_CLOSE_TIME)) {
+            throw new IllegalArgumentException("주문 시간이 아닙니다. 관리자에게 문의하세요.");
+        }
+
+        return new Order(currentDateTime, beverages);
+    }
+}
+
+import static org.assertj.core.api.Assertions.*;
+import org.junit.jupiter.api.Test;
+import java.time.LocalDateTime;
+
+class CafeKioskTest {
+
+    @Test
+    void createOrderWithinBusinessHours() {
+        CafeKiosk kiosk = new CafeKiosk();
+        LocalDateTime testTime = LocalDateTime.of(2024, 11, 9, 10, 0); // 오전 10시 (영업시간 내)
+
+        Order order = kiosk.createOrder(testTime);
+
+        assertThat(order).isNotNull();
+    }
+
+    @Test
+    void createOrderOutsideBusinessHours() {
+        CafeKiosk kiosk = new CafeKiosk();
+        LocalDateTime testTime = LocalDateTime.of(2024, 11, 9, 23, 0); // 오후 11시 (영업시간 외)
+
+        assertThatThrownBy(() -> kiosk.createOrder(testTime))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessage("주문 시간이 아닙니다. 관리자에게 문의하세요.");
+    }
+}
+```
+</details>
+
+---
+<details>
+  <summary>정리</summary>
+
+### 🧩 수동 테스트 vs 자동 테스트
+- **가장 큰 차이점**: 테스트 결과를 검증하는 **주체**이다.  
+  → 수동 테스트는 **사람의 눈으로**,  
+  → 자동 테스트는 **기계(코드)**가 검증한다.
+
+---
+
+### ⚙️ 유닛 테스트(Unit Test)의 대상과 특징
+- **검증 대상**: 코드의 작은 단위 (클래스 / 메서드)
+- **특징**: 다른 코드와 **독립적으로 동작**해야 하며, 빠르고 반복 가능한 검증이 가능하다.  
+  → 즉, 시스템의 일부분을 **분리하여 독립적으로 검증**하는 테스트이다.
+
+---
+
+### 🧱 AssertJ의 주요 장점
+- **풍부한 검증(Assertion) API 제공**
+- **가독성 높은 문법**을 통해 다양한 조건을 명확하게 표현할 수 있다.  
+  예:
+  ```java
+  assertThat(result)
+      .isNotNull()
+      .startsWith("OK")
+      .contains("success");
+  ```
+---
+
+### ⚙️ 경계값 테스트 (Boundary Test)
+- 조건이 **“정수 값이 3 이상일 때”**라면,  
+  → **경계값은 3** (조건이 막 시작되는 값)  
+  → **바로 아래 값은 2** (조건이 막 깨지는 값)  
+  두 값을 우선적으로 검증해야 한다.  
+  즉, “조건의 경계 지점과 그 주변 값”을 확인하는 것이 핵심이다.
+
+---
+
+### 💡 테스트하기 어려운 코드 분리 이유
+- **목적**: 테스트의 **예측 가능성**과 **안정성 확보**
+- **예시**: `LocalDateTime.now()`처럼 실행 시마다 결과가 달라지는 코드  
+  → 외부 환경에 의존하므로 테스트가 불안정해짐  
+  → 이를 **테스트 가능한 영역(의존 주입 등)**으로 분리하면  
+  **결과가 일정하고 재현 가능한 테스트**를 작성할 수 있다.
+</details>
