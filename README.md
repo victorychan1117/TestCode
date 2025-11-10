@@ -669,3 +669,88 @@ class ProductRepositoryTest {
 }
 ```
 </details>
+
+---
+
+<details>
+  <summary>@AfterEach로 테스트 간 독립성 보장</summary>
+
+`@AfterEach`는 각 테스트 메서드 실행이 끝난 뒤 **데이터베이스를 초기 상태로 되돌리는 역할**을 한다.  
+이 과정을 통해 테스트 간 **데이터 의존성**이 생기지 않도록 한다.
+
+예를 들어, 한 테스트에서 저장한 데이터가 다음 테스트에 남아 있다면  
+테스트 결과가 일관되지 않게 되므로, 각 테스트는 항상 **깨끗한 DB 상태에서 시작**해야 한다.
+
+아래 코드는 `Order`, `Product`, `Stock` 등 여러 도메인 간의 관계를 고려하여  
+외래키 제약을 피하기 위해 **참조 순서대로 삭제하는 예시**이다.
+
+```java
+@AfterEach
+void tearDown() {
+    // FK 제약 관계를 고려하여 자식 → 부모 순서로 삭제
+    orderProductRepository.deleteAllInBatch(); // Order-Product 중간 테이블
+    orderRepository.deleteAllInBatch();        // 주문 테이블
+    productRepository.deleteAllInBatch();      // 상품 테이블
+    stockRepository.deleteAllInBatch();        // 재고 테이블
+}
+```
+</details>
+
+---
+
+<details>
+  <summary>테스트 코드에서 @Transactional을 쓰지 않는 이유</summary>
+
+`@SpringBootTest`는 **스프링의 전체 컨텍스트를 로드하는 통합 테스트**이다.  
+즉, 실제 서비스의 `@Transactional` 설정이 그대로 반영되어 작동한다.  
+따라서 테스트 클래스에 별도로 `@Transactional`을 붙이면 **중첩 트랜잭션**이 발생할 수 있고,  
+실제 서비스 트랜잭션 동작과 다르게 오작동할 위험이 있다.
+
+---
+
+### ⚙️ 1️⃣ 서비스 계층에서의 @Transactional
+서비스 계층에 트랜잭션을 두는 이유는 **비즈니스 로직 단위로 데이터 일관성을 보장하기 위해서**이다.
+
+```java
+@Service
+@Transactional
+public class OrderService {
+    public void createOrder(OrderRequest request) {
+        saveOrder();
+        updateStock();
+        saveOrderHistory();
+        // 중간에 예외 발생 시 전체 rollback
+    }
+}
+```
+
+### ⚡️ 테스트 코드에서 @Transactional을 추가하면?
+
+`@SpringBootTest`는 이미 트랜잭션이 적용된 서비스 빈을 로드한다.  
+여기에 테스트 클래스에도 `@Transactional`을 추가하면 다음 문제가 발생한다.
+
+| 문제점 | 설명 |
+|--------|------|
+| ⚠️ 트랜잭션 중첩 | 테스트 트랜잭션 + 서비스 트랜잭션이 겹쳐서 `Propagation.REQUIRED`로 하나의 트랜잭션으로 동작함 |
+| ⚠️ 롤백 혼동 | 서비스 내부에서 예외가 발생해도 테스트 전체가 롤백되어 정상 동작을 검증하기 어려움 |
+| ⚠️ 데이터 꼬임 | 테스트가 실패했는데 데이터가 남거나, 반대로 예상치 못한 롤백이 발생할 수 있음 |
+
+---
+
+### 🧩 그래서 테스트는 이렇게 구성한다
+
+- 서비스에만 `@Transactional`을 두고
+- 테스트는 실제 서비스 트랜잭션을 그대로 실행시키며
+- 데이터 정리는 `@AfterEach`에서 명시적으로 처리한다.
+
+```java
+@AfterEach
+void tearDown() {
+    orderProductRepository.deleteAllInBatch();
+    orderRepository.deleteAllInBatch();
+    productRepository.deleteAllInBatch();
+    stockRepository.deleteAllInBatch();
+}
+```
+</details>
+
